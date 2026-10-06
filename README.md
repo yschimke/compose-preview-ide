@@ -100,5 +100,8 @@ the IDE controls around a design, not the design being authored.
 
 Repository releases include `compose-ui-builder-intellij-plugin-<version>.zip`. Install it with
 **Settings → Plugins → Install Plugin from Disk**, then restart the IDE and open the tool window.
-The plugin requires IntelliJ Platform build 262 (IntelliJ IDEA 2026.2.x); older IDEs filter
-the ZIP out of the plugin chooser as incompatible.
+The plugin requires IntelliJ Platform build **262.10968.63** or newer within the 262 line:
+**IntelliJ IDEA 2026.2.3** or **Android Studio Rabbit 2 Canary 3 (2026.2.2.3)**.
+Android Studio Rabbit 1 (2026.2.1), including its stable release, bundles an older Compose
+runtime without the editor’s required `FrameRecomposer` API and is incompatible. Older IDEs
+filter the ZIP out of the plugin chooser. Installed-plugin CI tests both supported IDEs.

@@ -39,5 +39,6 @@ with zipfile.ZipFile(archives[0]) as distribution:
                     assert required <= names, (entry, required - names)
 assert found == required, required - found
 assert descriptor is not None, "Missing stable plugin ID"
+assert descriptor.find("idea-version").attrib["since-build"] == "262.10968.63"
 assert descriptor.find("idea-version").attrib["until-build"] == "262.*"
 print(f"Verified {archives[0]}: plugin identity, schemas and platform-owned class exclusions")

@@ -70,7 +70,7 @@ class InstalledPluginSmokeTest {
 
   // AndroidInstaller calls this field buildNumber but resolves it against the Android Studio
   // release version in JetBrains' maintained release list.
-  private fun androidStudio(): IdeInfo = IdeInfo.AndroidStudio.copy(buildNumber = "2026.2.1.6")
+  private fun androidStudio(): IdeInfo = IdeInfo.AndroidStudio.copy(buildNumber = "2026.2.2.3")
 
   private fun smoke(
     ide: IdeInfo,
