@@ -38,8 +38,10 @@ checkout script and all tests, and include the pin update in a PR.
 Release Please opens a version/changelog PR on main. Merging it builds and smoke-tests the ZIP,
 then uploads it to the new GitHub release. `workflow_dispatch` can retry an existing release tag.
 No JetBrains Marketplace credentials are needed; distribution remains **Install Plugin from Disk**.
-The first independent release is 3.87.0, continuing above the last bundled release (3.86.0) so
-existing installations can upgrade. Later minor releases are independent of UI Builder versions.
+The first independent release is **1.0.0**, starting a new version sequence for this repository.
+Later minor releases are independent of UI Builder versions. This resets the version below the
+previous bundled 3.x releases: replace those installations manually using **Install Plugin from
+Disk** (uninstall the old plugin first if the IDE rejects the lower version).
 The plugin ID `ee.schimke.composeai.ui-builder-poc` and ZIP name
 `compose-ui-builder-intellij-plugin-<version>.zip` remain stable.
 

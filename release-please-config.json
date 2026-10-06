@@ -3,7 +3,7 @@
   "release-type": "simple",
   "include-v-in-tag": true,
   "versioning": "always-bump-minor",
-  "initial-version": "3.87.0",
+  "initial-version": "1.0.0",
   "packages": {
     ".": {
       "package-name": "compose-preview-ide",
