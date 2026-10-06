@@ -86,6 +86,10 @@ class InstalledPluginSmokeTest {
         applyVMOptionsPatch {
           addSystemProperty("idea.trust.all.projects", true)
           addSystemProperty("ide.show.tips.on.startup.default.value", false)
+          // Android Studio has its own consent dialog, separate from JetBrains startup dialogs.
+          // Without this test-only switch it blocks project opening on a fresh CI profile.
+          // ConsentDialog leaves analytics opted out when the dialog is suppressed.
+          addSystemProperty("disable.android.analytics.consent.dialog", true)
         }
       }
       .runIdeWithDriver()
