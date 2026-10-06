@@ -101,6 +101,11 @@ class InstalledPluginSmokeTest {
             """
               .trimMargin()
           )
+        if (name == "intellij-idea") {
+          // InitialConfigImportState recognizes this as an existing profile. Avoid automatic
+          // first-run trial activation reloading modules while the smoke test opens its project.
+          paths.configDir.resolve("options/ide.general.xml").writeText("<application />")
+        }
         applyVMOptionsPatch {
           addSystemProperty("idea.trust.all.projects", true)
           addSystemProperty("ide.show.tips.on.startup.default.value", false)
