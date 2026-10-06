@@ -104,7 +104,7 @@ intellijPlatform {
     name = "Compose UI Builder POC"
     version = project.version.toString()
     ideaVersion {
-      sinceBuild = "262"
+      sinceBuild = "262.10968.63"
       // Pinned to the platform line the plugin is built and smoke-tested against. The ZIP carries
       // no Compose or Skiko of its own (see the excludes above): the editor, compiled against this
       // repository's Compose Multiplatform, runs on whatever Compose the IDE bundles. An open-ended

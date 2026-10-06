@@ -1,6 +1,8 @@
 package ee.schimke.composeai.uibuilder.intellij
 
 import com.intellij.driver.sdk.invokeAction
+import com.intellij.driver.sdk.ui.ui
+import com.intellij.driver.sdk.waitFor
 import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.ide.starter.ci.CIServer
 import com.intellij.ide.starter.ci.NoCIServer
@@ -16,6 +18,8 @@ import com.intellij.tools.ide.starter.product.android.studio.AndroidStudio
 import com.intellij.tools.ide.starter.product.idea.ultimate.IdeaUltimate
 import java.nio.file.Path
 import kotlin.io.path.absolute
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.minutes
 import org.junit.jupiter.api.Test
 import org.kodein.di.DI
@@ -66,7 +70,7 @@ class InstalledPluginSmokeTest {
 
   // AndroidInstaller calls this field buildNumber but resolves it against the Android Studio
   // release version in JetBrains' maintained release list.
-  private fun androidStudio(): IdeInfo = IdeInfo.AndroidStudio.copy(buildNumber = "2026.2.1.6")
+  private fun androidStudio(): IdeInfo = IdeInfo.AndroidStudio.copy(buildNumber = "2026.2.2.3")
 
   private fun smoke(
     ide: IdeInfo,
@@ -83,13 +87,43 @@ class InstalledPluginSmokeTest {
       )
       .apply {
         PluginConfigurator(this).installPluginFromPath(plugin)
+        // Use a bundled theme explicitly: the 262 default Islands theme can temporarily lose
+        // its editor scheme during startup plugin reloads on a fresh profile.
+        paths.configDir
+          .resolve("options")
+          .createDirectories()
+          .resolve("laf.xml")
+          .writeText(
+            """
+            |<application><component name="LafManager" autodetect="false">
+            |<laf themeId="Darcula" />
+            |</component></application>
+            """
+              .trimMargin()
+          )
+        if (name == "intellij-idea") {
+          // InitialConfigImportState recognizes this as an existing profile. Avoid automatic
+          // first-run trial activation reloading modules while the smoke test opens its project.
+          paths.configDir.resolve("options/ide.general.xml").writeText("<application />")
+        }
         applyVMOptionsPatch {
           addSystemProperty("idea.trust.all.projects", true)
           addSystemProperty("ide.show.tips.on.startup.default.value", false)
+          // Android Studio has its own consent dialog, separate from JetBrains startup dialogs.
+          // Without this test-only switch it blocks project opening on a fresh CI profile.
+          // ConsentDialog leaves analytics opted out when the dialog is suppressed.
+          addSystemProperty("disable.android.analytics.consent.dialog", true)
         }
       }
       .runIdeWithDriver()
       .useDriverAndCloseIde {
+        if (name == "android-studio") {
+          // Fresh Studio profiles offer Google sign-in after opening the project. Choosing the
+          // offline path lets its startup task finish without a Google account or credentials.
+          val skipSignIn = ui.x("//div[@text='Skip for now']")
+          waitFor("Android Studio first-run sign-in", 1.minutes) { skipSignIn.present() }
+          skipSignIn.click()
+        }
         waitForIndicators(5.minutes)
         invokeAction("ActivateComposeUIBuilderToolWindow")
         waitForIndicators(2.minutes)
