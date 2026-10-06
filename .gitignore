@@ -1,0 +1,9 @@
+.gradle/
+.kotlin/
+.intellijPlatform/
+/.idea/
+.upstream/
+build/
+out/
+*.iml
+__pycache__/
