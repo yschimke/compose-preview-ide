@@ -1,6 +1,8 @@
 package ee.schimke.composeai.uibuilder.intellij
 
 import com.intellij.driver.sdk.invokeAction
+import com.intellij.driver.sdk.ui.ui
+import com.intellij.driver.sdk.waitFor
 import com.intellij.driver.sdk.waitForIndicators
 import com.intellij.ide.starter.ci.CIServer
 import com.intellij.ide.starter.ci.NoCIServer
@@ -110,6 +112,13 @@ class InstalledPluginSmokeTest {
       }
       .runIdeWithDriver()
       .useDriverAndCloseIde {
+        if (name == "android-studio") {
+          // Fresh Studio profiles offer Google sign-in after opening the project. Choosing the
+          // offline path lets its startup task finish without a Google account or credentials.
+          val skipSignIn = ui.x("//div[@text='Skip for now']")
+          waitFor("Android Studio first-run sign-in", 1.minutes) { skipSignIn.present() }
+          skipSignIn.click()
+        }
         waitForIndicators(5.minutes)
         invokeAction("ActivateComposeUIBuilderToolWindow")
         waitForIndicators(2.minutes)
