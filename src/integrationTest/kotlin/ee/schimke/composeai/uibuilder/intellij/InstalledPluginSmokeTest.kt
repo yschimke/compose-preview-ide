@@ -16,6 +16,8 @@ import com.intellij.tools.ide.starter.product.android.studio.AndroidStudio
 import com.intellij.tools.ide.starter.product.idea.ultimate.IdeaUltimate
 import java.nio.file.Path
 import kotlin.io.path.absolute
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.minutes
 import org.junit.jupiter.api.Test
 import org.kodein.di.DI
@@ -83,6 +85,20 @@ class InstalledPluginSmokeTest {
       )
       .apply {
         PluginConfigurator(this).installPluginFromPath(plugin)
+        // Use a bundled theme explicitly: the 262 default Islands theme can temporarily lose
+        // its editor scheme during startup plugin reloads on a fresh profile.
+        paths.configDir
+          .resolve("options")
+          .createDirectories()
+          .resolve("laf.xml")
+          .writeText(
+            """
+            |<application><component name="LafManager" autodetect="false">
+            |<laf themeId="Darcula" />
+            |</component></application>
+            """
+              .trimMargin()
+          )
         applyVMOptionsPatch {
           addSystemProperty("idea.trust.all.projects", true)
           addSystemProperty("ide.show.tips.on.startup.default.value", false)
