@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/yschimke/compose-preview-ide/compare/v1.0.0...v1.1.0) (2026-10-07)
+
+
+### Bug Fixes
+
+* pin compose-ui-builder to [#490](https://github.com/yschimke/compose-preview-ide/issues/490)'s squash commit on main ([#8](https://github.com/yschimke/compose-preview-ide/issues/8)) ([c9c0724](https://github.com/yschimke/compose-preview-ide/commit/c9c0724ddfb5d59cb701516e55be41bd6fef40dc))
+
 ## [1.0.0](https://github.com/yschimke/compose-preview-ide/compare/v1.0.0...v1.0.0) (2026-10-06)
 
 
