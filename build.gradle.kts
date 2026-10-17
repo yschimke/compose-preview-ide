@@ -75,7 +75,7 @@ dependencies {
     "org.jetbrains.compose.runtime:runtime:${libs.versions.compose.multiplatform.get()}"
   )
   add("integrationTestImplementation", "org.junit.jupiter:junit-jupiter:5.14.4")
-  add("integrationTestImplementation", "org.kodein.di:kodein-di-jvm:7.26.1")
+  add("integrationTestImplementation", "org.kodein.di:kodein-di-jvm:7.33.0")
   // Starter calls TeamCityReporter even under NoCIServer, but its published Gradle metadata omits
   // the service-message classes that reporter loads at runtime.
   add("integrationTestRuntimeOnly", "org.jetbrains.teamcity:serviceMessages:2024.07")
