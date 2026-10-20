@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0](https://github.com/yschimke/compose-preview-ide/compare/v1.0.0...v1.1.0) (2026-10-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency org.junit.jupiter:junit-jupiter to v5.14.4 ([#13](https://github.com/yschimke/compose-preview-ide/issues/13)) ([3264da1](https://github.com/yschimke/compose-preview-ide/commit/3264da1163de8e34283e8da98ef13f79fdf6daf1))
+* **deps:** update dependency org.kodein.di:kodein-di-jvm to v7.33.0 ([#14](https://github.com/yschimke/compose-preview-ide/issues/14)) ([e9cc8ac](https://github.com/yschimke/compose-preview-ide/commit/e9cc8ac222085b295d8a368ddecd14b86d93b8bd))
+* pin compose-ui-builder to [#490](https://github.com/yschimke/compose-preview-ide/issues/490)'s squash commit on main ([#8](https://github.com/yschimke/compose-preview-ide/issues/8)) ([c9c0724](https://github.com/yschimke/compose-preview-ide/commit/c9c0724ddfb5d59cb701516e55be41bd6fef40dc))
+
 ## [1.0.0](https://github.com/yschimke/compose-preview-ide/compare/v1.0.0...v1.0.0) (2026-10-06)
 
 
