@@ -1,5 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>yschimke/renovate-config"],
-  "platformAutomerge": true
+  "platformAutomerge": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the pinned compose-ui-builder commit SHA in ui-builder-revision.txt against upstream main.",
+      "managerFilePatterns": ["/^ui-builder-revision\\.txt$/"],
+      "matchStrings": ["(?<currentDigest>[0-9a-f]{40})"],
+      "currentValueTemplate": "main",
+      "datasourceTemplate": "git-refs",
+      "depNameTemplate": "compose-ui-builder",
+      "packageNameTemplate": "https://github.com/yschimke/compose-ui-builder"
+    }
+  ]
 }
