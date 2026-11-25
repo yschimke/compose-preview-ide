@@ -25,7 +25,7 @@ private object UiBuilderDesignSchemaProvider : JsonSchemaFileProvider {
       JsonSchemaProviderFactory.getResourceFile(
         UiBuilderDesignSchemaProvider::class.java,
         "/schemas/compose-ui-builder-document-v1.schema.json",
-      )
+      ),
     )
 
   override fun getSchemaType(): SchemaType = SchemaType.embeddedSchema
@@ -41,7 +41,7 @@ private object UiBuilderProductionSchemaProvider : JsonSchemaFileProvider {
       JsonSchemaProviderFactory.getResourceFile(
         UiBuilderProductionSchemaProvider::class.java,
         "/schemas/compose-ui-builder-production-v1.schema.json",
-      )
+      ),
     )
 
   override fun getSchemaType(): SchemaType = SchemaType.embeddedSchema

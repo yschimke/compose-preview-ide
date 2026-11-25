@@ -46,7 +46,7 @@ private class UiBuilderDocumentTreeElement(private val file: JsonFile) : Structu
 
   override fun getPresentation(): ItemPresentation =
     UiBuilderItemPresentation(
-      document?.string("title")?.let { "Design · $it" } ?: "Compose UI Builder design"
+      document?.string("title")?.let { "Design · $it" } ?: "Compose UI Builder design",
     )
 
   override fun getChildren(): Array<TreeElement> {

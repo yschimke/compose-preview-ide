@@ -281,7 +281,7 @@ internal object JewelUiBuilderChrome : UiBuilderChrome {
       Modifier.fillMaxWidth()
         .clip(RoundedCornerShape(4.dp))
         .background(JewelTheme.globalColors.panelBackground)
-        .padding(6.dp)
+        .padding(6.dp),
     ) {
       Box(
         Modifier.fillMaxWidth().alpha(if (model.unexportable) 0.45f else 1f),
@@ -695,11 +695,11 @@ internal object JewelUiBuilderChrome : UiBuilderChrome {
         .semantics { contentDescription = "${model.label} property" }
     val keyboardOptions =
       androidx.compose.foundation.text.KeyboardOptions(
-        imeAction = if (model.multiline) ImeAction.Default else ImeAction.Done
+        imeAction = if (model.multiline) ImeAction.Default else ImeAction.Done,
       )
     val keyboardActions =
       androidx.compose.foundation.text.KeyboardActions(
-        onDone = { if (model.submitEnabled) model.onSubmit() }
+        onDone = { if (model.submitEnabled) model.onSubmit() },
       )
     if (model.multiline) {
       TextArea(
@@ -835,6 +835,7 @@ private fun UiBuilderMenuIcon.jewelIcon(): IconKey =
     UiBuilderMenuIcon.Help -> AllIconsKeys.Actions.Help
     UiBuilderMenuIcon.Copy -> AllIconsKeys.Actions.Copy
     UiBuilderMenuIcon.Link -> AllIconsKeys.Actions.MenuOpen
+    UiBuilderMenuIcon.Code -> AllIconsKeys.Actions.ShowCode
     UiBuilderMenuIcon.Download -> AllIconsKeys.Actions.Download
     UiBuilderMenuIcon.Properties -> AllIconsKeys.Actions.Properties
     UiBuilderMenuIcon.QuickEdit -> AllIconsKeys.Actions.Edit
