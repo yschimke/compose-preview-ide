@@ -272,6 +272,10 @@ internal val OfflineCatalog.displayName: String
       OfflineCatalog.M3 -> "Material 3"
       OfflineCatalog.WEAR_M3 -> "Wear M3"
       OfflineCatalog.REMOTE_M3 -> "Wear widgets"
+      OfflineCatalog.REMOTE_WIDGETS -> "Remote widgets"
+      OfflineCatalog.GLIMMER -> "Glimmer"
+      OfflineCatalog.A2UI -> "A2UI"
+      OfflineCatalog.KOBENTO -> "Kobento"
     }
 
 /**

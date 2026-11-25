@@ -63,7 +63,7 @@ dependencies {
   // transitive Compose runtime/UI dependencies out of the ZIP: those must stay supplied by the
   // platform, or the plugin would load a second Compose runtime and Skiko native library.
   implementation(
-    "org.jetbrains.compose.ui:ui-backhandler-desktop:${libs.versions.compose.multiplatform.get()}"
+    "org.jetbrains.compose.ui:ui-backhandler-desktop:${libs.versions.compose.multiplatform.get()}",
   ) {
     exclude(group = "androidx.compose.runtime")
     exclude(group = "org.jetbrains.compose.runtime")
@@ -72,7 +72,7 @@ dependencies {
   testImplementation(kotlin("test"))
   // The Compose compiler plugin runs on every source set and refuses one without the runtime.
   testCompileOnly(
-    "org.jetbrains.compose.runtime:runtime:${libs.versions.compose.multiplatform.get()}"
+    "org.jetbrains.compose.runtime:runtime:${libs.versions.compose.multiplatform.get()}",
   )
   add("integrationTestImplementation", "org.junit.jupiter:junit-jupiter:6.1.3")
   add("integrationTestImplementation", "org.kodein.di:kodein-di-jvm:7.33.0")

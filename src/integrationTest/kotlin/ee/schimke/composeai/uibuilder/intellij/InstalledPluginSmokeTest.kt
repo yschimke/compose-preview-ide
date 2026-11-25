@@ -99,7 +99,7 @@ class InstalledPluginSmokeTest {
             |<laf themeId="Darcula" />
             |</component></application>
             """
-              .trimMargin()
+              .trimMargin(),
           )
         if (name == "intellij-idea") {
           // InitialConfigImportState recognizes this as an existing profile. Avoid automatic
