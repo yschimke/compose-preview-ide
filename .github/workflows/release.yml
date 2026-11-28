@@ -6,12 +6,19 @@ on:
       tag:
         type: string
         required: true
+      marketplace:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       tag:
         description: Existing release tag to build and upload
         type: string
         required: true
+      marketplace:
+        description: Also publish to JetBrains Marketplace (disable when retrying an already published version)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -82,3 +89,57 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: gh release upload "$RELEASE_TAG" dist/*.zip --clobber
+  marketplace:
+    needs: [build, smoke]
+    if: inputs.marketplace
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Scope the token to an environment so it can require approval and stays out of PR jobs.
+    environment: jetbrains-marketplace
+    steps:
+      - name: Check for Marketplace token
+        id: token
+        env:
+          JETBRAINS_MARKETPLACE_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
+        run: |
+          if [ -n "$JETBRAINS_MARKETPLACE_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::JETBRAINS_MARKETPLACE_TOKEN is not set; skipping Marketplace publishing."
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.token.outputs.present
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        if: steps.token.outputs.present
+        with:
+          distribution: temurin
+          java-version: |
+            25
+            21
+            17
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        if: steps.token.outputs.present
+        with:
+          cache-provider: basic
+      # Configuring the build resolves the composite build and version catalog from the pin.
+      - name: Check out pinned UI Builder source
+        if: steps.token.outputs.present
+        run: ./scripts/checkout-ui-builder.sh
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.token.outputs.present
+        with:
+          name: release-plugin
+          path: dist
+      - name: Publish verified plugin
+        if: steps.token.outputs.present
+        env:
+          JETBRAINS_MARKETPLACE_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          archives=(dist/*.zip)
+          test "${#archives[@]}" -eq 1
+          test "${archives[0]}" = "dist/compose-ui-builder-intellij-plugin-${RELEASE_TAG#v}.zip"
+          ./gradlew --no-daemon publishPlugin -PmarketplaceArchive="$PWD/${archives[0]}"

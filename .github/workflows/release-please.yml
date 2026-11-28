@@ -54,5 +54,8 @@ jobs:
     uses: ./.github/workflows/release.yml
     permissions:
       contents: write
+    # Supplies JETBRAINS_MARKETPLACE_TOKEN when it is a repository secret; an environment secret
+    # on `jetbrains-marketplace` is read by the called job directly.
+    secrets: inherit
     with:
       tag: ${{ needs.release-please.outputs.tag }}
