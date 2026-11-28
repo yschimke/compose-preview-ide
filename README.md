@@ -56,7 +56,7 @@ The first independent release is **1.0.0**, starting a new version sequence for 
 Later minor releases are independent of UI Builder versions. This resets the version below the
 previous bundled 3.x releases: replace those installations manually using **Install Plugin from
 Disk** (uninstall the old plugin first if the IDE rejects the lower version).
-The plugin ID `ee.schimke.composeai.ui-builder-poc` and ZIP name
+The plugin is listed as **Compose Preview Tools**; its ID `ee.schimke.composeai.ui-builder-poc` and ZIP name
 `compose-ui-builder-intellij-plugin-<version>.zip` remain stable.
 
 Actions must be allowed to create pull requests in repository settings. An optional

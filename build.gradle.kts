@@ -106,7 +106,9 @@ dependencies {
 
 intellijPlatform {
   pluginConfiguration {
-    name = "Compose UI Builder POC"
+    // Display name only; the plugin ID stays `ee.schimke.composeai.ui-builder-poc` so existing
+    // installations and the Marketplace listing keep updating in place.
+    name = "Compose Preview Tools"
     version = project.version.toString()
     ideaVersion {
       sinceBuild = "262.10968.63"
