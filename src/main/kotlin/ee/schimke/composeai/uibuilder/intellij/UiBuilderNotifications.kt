@@ -34,6 +34,7 @@ internal fun notifyUiBuilder(
 /** Application settings, stored where every project reads them. */
 internal object UiBuilderSettings {
   private const val DEFAULT_SERVER_PROPERTY = "compose.ui.builder.default.server"
+  private const val CLI_EXECUTABLE_PROPERTY = "compose.preview.cli.executable"
   private const val FALLBACK_SERVER = "https://preview.coo.ee"
 
   /** The server a first "Browse server designs" offers; each project then remembers its own. */
@@ -45,6 +46,21 @@ internal object UiBuilderSettings {
     set(value) {
       PropertiesComponent.getInstance().setValue(DEFAULT_SERVER_PROPERTY, value.trim())
     }
+
+  /**
+   * Path or command name of the `compose-preview` CLI used by the Android Studio simulator device
+   * provisioner. Blank falls back to `COMPOSE_PREVIEW_CLI`, then `"compose-preview"` on `PATH`.
+   */
+  var composePreviewCli: String
+    get() = PropertiesComponent.getInstance().getValue(CLI_EXECUTABLE_PROPERTY)?.trim().orEmpty()
+    set(value) {
+      PropertiesComponent.getInstance().setValue(CLI_EXECUTABLE_PROPERTY, value.trim())
+    }
+
+  /** Effective CLI executable path, honoring IDE settings, `COMPOSE_PREVIEW_CLI`, then `PATH`. */
+  fun resolveComposePreviewCli(): String = composePreviewCli.ifBlank {
+    System.getenv("COMPOSE_PREVIEW_CLI")?.trim().orEmpty().ifBlank { "compose-preview" }
+  }
 }
 
 /** Settings › Tools › Compose UI Builder. */
@@ -55,6 +71,15 @@ internal class UiBuilderConfigurable : BoundConfigurable("Compose UI Builder") {
         .bindText(UiBuilderSettings::defaultServer)
         .columns(COLUMNS_LARGE)
         .comment("Offered by Browse Server Designs until a project connects to another server.")
+    }
+    row("compose-preview CLI:") {
+      textField()
+        .bindText(UiBuilderSettings::composePreviewCli)
+        .columns(COLUMNS_LARGE)
+        .comment(
+          "Optional path to the compose-preview CLI for the simulator device provisioner " +
+            "(blank uses COMPOSE_PREVIEW_CLI or compose-preview on PATH).",
+        )
     }
   }
 }

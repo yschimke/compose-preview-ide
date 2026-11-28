@@ -9,6 +9,7 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.json</depends>
+  <depends optional="true" config-file="compose-preview-simulator-android.xml">org.jetbrains.android</depends>
   <!--
     addComposeTab is compiled from the bundled Jewel bridge, but a bundledModule Gradle dependency
     only supplies the compile classpath. Declaring the runtime module here makes the bridge (and its
@@ -27,6 +28,8 @@
         extensions="uid" />
     <json.customStructureViewFactory
         implementation="ee.schimke.composeai.uibuilder.intellij.UiBuilderStructureViewFactory" />
+    <applicationService
+        serviceImplementation="ee.schimke.composeai.simulator.intellij.SimulatorManagerService" />
     <projectService
         serviceImplementation="ee.schimke.composeai.uibuilder.intellij.UiBuilderProjectService" />
     <fileEditorProvider
@@ -70,6 +73,19 @@
       <action id="ComposeUiBuilder.OpenWearWidgetEditor"
           class="ee.schimke.composeai.uibuilder.intellij.OpenWearWidgetEditorAction"
           text="Open Wear Widgets Scratch Editor" />
+      <separator />
+      <action id="ComposePreview.StartPhoneSimulator"
+          class="ee.schimke.composeai.simulator.intellij.StartPhoneSimulatorAction"
+          text="Start Compose Preview Simulator (Phone)"
+          description="Start compose-preview android-simulator --adb so it appears in ADB and Android Studio" />
+      <action id="ComposePreview.StartWearSimulator"
+          class="ee.schimke.composeai.simulator.intellij.StartWearSimulatorAction"
+          text="Start Compose Preview Simulator (Wear)"
+          description="Start compose-preview android-simulator --adb --form-factor wear" />
+      <action id="ComposePreview.StopSimulators"
+          class="ee.schimke.composeai.simulator.intellij.StopSimulatorsAction"
+          text="Stop Compose Preview Simulators"
+          description="Stop any running Compose Preview Simulator ADB processes started by this IDE" />
     </group>
   </actions>
   <extensions defaultExtensionNs="JavaScript">

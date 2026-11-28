@@ -1,0 +1,178 @@
+package ee.schimke.composeai.simulator.intellij
+
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
+import ee.schimke.composeai.uibuilder.intellij.UiBuilderSettings
+import ee.schimke.composeai.uibuilder.intellij.notifyUiBuilder
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Application-scoped lifecycle manager for `compose-preview android-simulator --adb` processes.
+ *
+ * Shared by the Android Studio `DeviceProvisionerPlugin` (when `org.jetbrains.android` is loaded)
+ * and the IDE Tools menu actions, guaranteeing every spawned simulator is stopped cleanly when the
+ * IDE closes.
+ */
+/** Seam over [SimulatorManagerService] so the `DeviceProvisionerPlugin` can be unit-tested. */
+internal interface SimulatorController {
+  fun addChangeListener(listener: () -> Unit): Disposable
+
+  fun runningInfo(profile: SimulatorProfile): SimulatorDeviceInfo?
+
+  fun findProfileBySerial(serial: String): SimulatorProfile?
+
+  fun start(profile: SimulatorProfile, projectBasePath: String? = null): SimulatorDeviceInfo
+
+  fun stop(profile: SimulatorProfile)
+}
+
+internal class SimulatorManagerService : Disposable, SimulatorController {
+  private val logger = Logger.getInstance(SimulatorManagerService::class.java)
+  private val running = ConcurrentHashMap<SimulatorProfile, RunningSimulatorProcess>()
+  private val profileLocks = ConcurrentHashMap<SimulatorProfile, Any>()
+  private val listeners = ConcurrentHashMap.newKeySet<() -> Unit>()
+
+  override fun addChangeListener(listener: () -> Unit): Disposable {
+    listeners.add(listener)
+    return Disposable { listeners.remove(listener) }
+  }
+
+  override fun runningInfo(profile: SimulatorProfile): SimulatorDeviceInfo? {
+    val proc = running[profile] ?: return null
+    if (!proc.isAlive) {
+      running.remove(profile, proc)
+      return null
+    }
+    return proc.deviceInfo
+  }
+
+  override fun findProfileBySerial(serial: String): SimulatorProfile? =
+    running.entries
+      .firstOrNull { (_, proc) -> proc.isAlive && proc.deviceInfo.serial == serial }
+      ?.key
+
+  override fun start(profile: SimulatorProfile, projectBasePath: String?): SimulatorDeviceInfo {
+    val lock = profileLocks.computeIfAbsent(profile) { Any() }
+    return synchronized(lock) {
+      runningInfo(profile)?.let {
+        return@synchronized it
+      }
+      val cli = UiBuilderSettings.resolveComposePreviewCli()
+      val command = SimulatorDeviceEvents.buildLaunchCommand(cli, profile)
+      logger.info("Starting ${profile.displayName}: ${command.joinToString(" ")}")
+      val started =
+        RunningSimulatorProcess.start(
+          command = command,
+          workingDirectory = projectBasePath?.let(::File),
+          onLog = { line -> logger.info("[${profile.id}] $line") },
+          onExit = { code ->
+            logger.info("${profile.displayName} exited with code $code")
+            running.remove(profile)
+            notifyListeners()
+          },
+        )
+      val previous = running.put(profile, started)
+      if (previous != null && previous !== started) {
+        previous.stop()
+      }
+      notifyListeners()
+      started.deviceInfo
+    }
+  }
+
+  override fun stop(profile: SimulatorProfile) {
+    val lock = profileLocks.computeIfAbsent(profile) { Any() }
+    val proc = synchronized(lock) { running.remove(profile) } ?: return
+    proc.stop()
+    notifyListeners()
+  }
+
+  fun stopAll() {
+    val snapshot = running.keys.toList()
+    for (profile in snapshot) {
+      stop(profile)
+    }
+  }
+
+  override fun dispose() {
+    stopAll()
+  }
+
+  private fun notifyListeners() {
+    for (listener in listeners) {
+      runCatching(listener)
+    }
+  }
+
+  companion object {
+    fun getInstance(): SimulatorManagerService =
+      ApplicationManager.getApplication().getService(SimulatorManagerService::class.java)
+  }
+}
+
+internal abstract class StartSimulatorAction(private val profile: SimulatorProfile) : AnAction() {
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+  override fun actionPerformed(event: AnActionEvent) {
+    val project = event.project
+    object : Task.Backgroundable(project, "Starting ${profile.displayName}…", true) {
+        override fun run(indicator: ProgressIndicator) {
+          indicator.isIndeterminate = true
+          try {
+            val info = SimulatorManagerService.getInstance().start(profile, project?.basePath)
+            if (project != null) {
+              notifyUiBuilder(
+                project,
+                "${profile.displayName} is ready on ${info.serial} (adb:${info.adbPort}). " +
+                  "Select it in Android Studio's Device Manager / Run dropdown.",
+              )
+            }
+          } catch (e: Exception) {
+            if (project != null) {
+              notifyUiBuilder(
+                project,
+                "Could not start ${profile.displayName}: ${e.message}",
+                NotificationType.ERROR,
+              )
+            }
+          }
+        }
+      }
+      .queue()
+  }
+}
+
+internal class StartPhoneSimulatorAction : StartSimulatorAction(SimulatorProfile.PHONE)
+
+internal class StartWearSimulatorAction : StartSimulatorAction(SimulatorProfile.WEAR)
+
+internal class StopSimulatorsAction : AnAction() {
+  override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+  override fun update(event: AnActionEvent) {
+    val svc = SimulatorManagerService.getInstance()
+    event.presentation.isEnabled = SimulatorProfile.entries.any { svc.runningInfo(it) != null }
+  }
+
+  override fun actionPerformed(event: AnActionEvent) {
+    val project: Project? = event.project
+    object : Task.Backgroundable(project, "Stopping Compose Preview Simulators…", false) {
+        override fun run(indicator: ProgressIndicator) {
+          SimulatorManagerService.getInstance().stopAll()
+          if (project != null) {
+            notifyUiBuilder(project, "Stopped running Compose Preview Simulators.")
+          }
+        }
+      }
+      .queue()
+  }
+}

@@ -95,6 +95,10 @@ dependencies {
     bundledModule("intellij.libraries.skiko")
     bundledPlugin("com.intellij.modules.json")
     bundledModule("intellij.json.structureView")
+    // Compile-only against the matching Marketplace Android plugin so the optional
+    // `compose-preview-simulator-android.xml` descriptor can register a DeviceProvisionerPlugin in
+    // Android Studio while keeping the plugin loadable in IntelliJ IDEA without the Android plugin.
+    compatiblePlugin("org.jetbrains.android")
     testFramework(TestFrameworkType.Starter, configurationName = "integrationTestImplementation")
   }
 }

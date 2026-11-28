@@ -107,3 +107,18 @@ The plugin requires IntelliJ Platform build **262.10968.63** or newer within the
 Android Studio Rabbit 1 (2026.2.1), including its stable release, bundles an older Compose
 runtime without the editor’s required `FrameRecomposer` API and is incompatible. Older IDEs
 filter the ZIP out of the plugin chooser. Installed-plugin CI tests both supported IDEs.
+
+## Compose Preview Simulator (Android Studio Device Manager & Run target)
+
+When the Android plugin (`org.jetbrains.android`) is installed — as in Android Studio and IntelliJ
+IDEA with Android support — the plugin registers an optional `DeviceProvisionerPlugin` exposing
+**Compose Preview Simulator (Phone)** and **Compose Preview Simulator (Wear)** in Device Manager
+and the Run ▶ deployment dropdown before any simulator process is running. Activating or running
+against either device lazily launches `compose-preview android-simulator --adb --control stdio`
+(plus `--form-factor wear` for Wear), hands off the resulting `emulator-<port>` ADB + gRPC device
+to Studio's embedded *Running Devices*, and stops the child process on deactivation or IDE exit.
+
+**Tools → Compose UI Builder** also offers **Start Compose Preview Simulator (Phone)**,
+**Start Compose Preview Simulator (Wear)**, and **Stop Compose Preview Simulators** for IDEs
+without the Android plugin. Configure a custom CLI path under **Settings → Tools → Compose UI
+Builder** (defaults to `COMPOSE_PREVIEW_CLI` or `compose-preview` on `PATH`).
