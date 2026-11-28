@@ -36,13 +36,27 @@ checkout script and all tests, and include the pin update in a PR.
 ## Releases
 
 Release Please opens a version/changelog PR on main. Merging it builds and smoke-tests the ZIP,
-then uploads it to the new GitHub release. `workflow_dispatch` can retry an existing release tag.
-No JetBrains Marketplace credentials are needed; distribution remains **Install Plugin from Disk**.
+then uploads it to the new GitHub release and publishes that same verified ZIP to JetBrains
+Marketplace (`./gradlew publishPlugin -PmarketplaceArchive=<zip>`, so nothing is rebuilt).
+`workflow_dispatch` can retry an existing release tag; untick **marketplace** when that version
+is already on Marketplace, which rejects duplicate uploads.
+
+### JetBrains Marketplace setup
+
+1. Upload the first version by hand at <https://plugins.jetbrains.com/plugin/add>; the API can
+   only publish updates to a plugin that already exists. JetBrains moderates new plugins.
+2. Create a permanent token under **My Tokens** in the Marketplace profile.
+3. In repository settings, create the `jetbrains-marketplace` environment (optionally with
+   required reviewers) and add the token as its `JETBRAINS_MARKETPLACE_TOKEN` secret.
+
+Without the token the Marketplace job logs a notice and skips, and GitHub releases still work.
+Uploads go to the `default` (stable) channel; set `JETBRAINS_MARKETPLACE_CHANNEL` to use another.
+Marketplace signs accepted uploads itself, so no author signing key is configured.
 The first independent release is **1.0.0**, starting a new version sequence for this repository.
 Later minor releases are independent of UI Builder versions. This resets the version below the
 previous bundled 3.x releases: replace those installations manually using **Install Plugin from
 Disk** (uninstall the old plugin first if the IDE rejects the lower version).
-The plugin ID `ee.schimke.composeai.ui-builder-poc` and ZIP name
+The plugin is listed as **Compose Preview Tools**; its ID `ee.schimke.composeai.ui-builder-poc` and ZIP name
 `compose-ui-builder-intellij-plugin-<version>.zip` remain stable.
 
 Actions must be allowed to create pull requests in repository settings. An optional

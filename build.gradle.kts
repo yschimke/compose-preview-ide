@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.PublishPluginTask
 
 plugins {
   alias(libs.plugins.ktfmt)
@@ -105,7 +106,9 @@ dependencies {
 
 intellijPlatform {
   pluginConfiguration {
-    name = "Compose UI Builder POC"
+    // Display name only; the plugin ID stays `ee.schimke.composeai.ui-builder-poc` so existing
+    // installations and the Marketplace listing keep updating in place.
+    name = "Compose Preview Tools"
     version = project.version.toString()
     ideaVersion {
       sinceBuild = "262.10968.63"
@@ -116,6 +119,25 @@ intellijPlatform {
       // this when `installedPluginSmoke` has passed against the next line.
       untilBuild = "262.*"
     }
+  }
+  // Release CI supplies the token from the `jetbrains-marketplace` environment. JetBrains
+  // Marketplace signs every accepted upload, so no author signing key is configured here.
+  publishing {
+    token = providers.environmentVariable("JETBRAINS_MARKETPLACE_TOKEN")
+    channels =
+      providers
+        .environmentVariable("JETBRAINS_MARKETPLACE_CHANNEL")
+        .map { listOf(it) }
+        .orElse(listOf("default"))
+  }
+}
+
+// Release CI uploads the exact ZIP it already verified and smoke-tested instead of a rebuild.
+providers.gradleProperty("marketplaceArchive").orNull?.let { archive ->
+  tasks.named<PublishPluginTask>("publishPlugin") {
+    archiveFiles.setFrom(archive)
+    // The plugin also wires an explicit build/sign dependency; drop it with the default archive.
+    setDependsOn(emptyList<Any>())
   }
 }
 

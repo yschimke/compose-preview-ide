@@ -7,3 +7,4 @@ build/
 out/
 *.iml
 __pycache__/
+local.properties

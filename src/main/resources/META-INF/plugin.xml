@@ -1,10 +1,16 @@
 <idea-plugin>
   <id>ee.schimke.composeai.ui-builder-poc</id>
-  <name>Compose UI Builder POC</name>
+  <name>Compose Preview Tools</name>
   <vendor>Yuri Schimke</vendor>
 
   <description><![CDATA[
-    Embeds the native Compose UI Builder in IntelliJ editor and preview views.
+    <p>Tools for Jetpack Compose and Compose Multiplatform previews.</p>
+    <ul>
+      <li><b>Compose UI Builder</b>: a visual editor and live preview for Material 3 and Wear M3
+        designs, embedded in the IDE editor and a tool window.</li>
+      <li><b>Compose Preview Simulator</b>: phone and Wear devices in Android Studio's Device
+        Manager and Run targets, backed by the <code>compose-preview</code> CLI.</li>
+    </ul>
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>
