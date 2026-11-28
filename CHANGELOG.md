@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/yschimke/compose-preview-ide/compare/v1.1.0...v1.2.0) (2026-11-28)
+
+
+### Features
+
+* add Android Studio DeviceProvisionerPlugin for Compose Preview Simulator ([#35](https://github.com/yschimke/compose-preview-ide/issues/35)) ([960229a](https://github.com/yschimke/compose-preview-ide/commit/960229ae7702bc7d5cbbad180dd797c7c54570e9))
+
 ## [1.1.0](https://github.com/yschimke/compose-preview-ide/compare/v1.0.0...v1.1.0) (2026-11-01)
 
 
