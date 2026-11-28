@@ -14,6 +14,7 @@ import ee.schimke.composeai.uibuilder.intellij.UiBuilderSettings
 import ee.schimke.composeai.uibuilder.intellij.notifyUiBuilder
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Application-scoped lifecycle manager for `compose-preview android-simulator --adb` processes.
@@ -69,6 +70,7 @@ internal class SimulatorManagerService : Disposable, SimulatorController {
       val cli = UiBuilderSettings.resolveComposePreviewCli()
       val command = SimulatorDeviceEvents.buildLaunchCommand(cli, profile)
       logger.info("Starting ${profile.displayName}: ${command.joinToString(" ")}")
+      val startedRef = AtomicReference<RunningSimulatorProcess?>(null)
       val started =
         RunningSimulatorProcess.start(
           command = command,
@@ -76,13 +78,17 @@ internal class SimulatorManagerService : Disposable, SimulatorController {
           onLog = { line -> logger.info("[${profile.id}] $line") },
           onExit = { code ->
             logger.info("${profile.displayName} exited with code $code")
-            running.remove(profile)
+            startedRef.get()?.let { exited -> running.remove(profile, exited) }
             notifyListeners()
           },
         )
+      startedRef.set(started)
       val previous = running.put(profile, started)
       if (previous != null && previous !== started) {
         previous.stop()
+      }
+      if (!started.isAlive) {
+        running.remove(profile, started)
       }
       notifyListeners()
       started.deviceInfo

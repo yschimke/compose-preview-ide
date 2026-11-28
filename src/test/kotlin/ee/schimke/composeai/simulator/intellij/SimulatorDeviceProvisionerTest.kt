@@ -27,10 +27,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class SimulatorDeviceProvisionerTest {
 
@@ -256,6 +259,43 @@ class SimulatorDeviceProvisionerTest {
       val disconnected = assertIs<DeviceState.Disconnected>(phone.stateFlow.value)
       assertNotNull(disconnected.error)
       assertTrue(disconnected.error!!.message.contains("compose-preview not found"))
+    } finally {
+      scope.cancel()
+    }
+  }
+
+  @Test
+  fun cancelDuringConnectWaitStopsProcessAndResetsTransitioningState(): Unit = runBlocking {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    try {
+      val controller = FakeSimulatorController()
+      val plugin =
+        SimulatorDeviceProvisionerPlugin(
+          scope = scope,
+          projectBasePath = null,
+          controller = controller,
+          ui = testUi,
+          ioDispatcher = Dispatchers.Default,
+          connectTimeoutMillis = 10_000L,
+        )
+      val phone =
+        plugin.devices.value.first { it.state.properties.deviceType == DeviceType.HANDHELD }
+
+      val activateJob = async { phone.activationAction!!.activate() }
+      withTimeout(2_000L) {
+        phone.stateFlow.first {
+          it is DeviceState.Disconnected && it.isTransitioning && it.status.contains("Connecting")
+        }
+      }
+      assertNotNull(controller.runningInfo(SimulatorProfile.PHONE))
+      activateJob.cancelAndJoin()
+
+      assertEquals(listOf(SimulatorProfile.PHONE), controller.stoppedProfiles)
+      val state = assertIs<DeviceState.Disconnected>(phone.stateFlow.value)
+      assertFalse(state.isTransitioning)
+      val presentation =
+        withTimeout(2_000L) { phone.activationAction!!.presentation.first { it.enabled } }
+      assertTrue(presentation.enabled)
     } finally {
       scope.cancel()
     }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -172,55 +173,68 @@ internal class SimulatorDeviceHandle(
 
       override suspend fun activate() {
         if (_stateFlow.value is DeviceState.Connected) return
+        val wasAlreadyRunning = controller.runningInfo(profile) != null
         _stateFlow.value =
           DeviceState.Disconnected(
             properties = baseProperties,
             isTransitioning = true,
             status = "Starting ${profile.displayName}…",
           )
-        val info =
-          try {
-            withContext(ioDispatcher) { controller.start(profile, projectBasePath) }
-          } catch (e: CancellationException) {
-            _stateFlow.value = DeviceState.Disconnected(baseProperties, status = "Offline")
-            throw e
-          } catch (e: Exception) {
-            val detail = e.message ?: "Failed to start ${profile.displayName}"
+        try {
+          val info =
+            try {
+              withContext(ioDispatcher) { controller.start(profile, projectBasePath) }
+            } catch (e: CancellationException) {
+              throw e
+            } catch (e: Exception) {
+              val detail = e.message ?: "Failed to start ${profile.displayName}"
+              _stateFlow.value =
+                DeviceState.Disconnected(
+                  properties = baseProperties,
+                  isTransitioning = false,
+                  status = "Offline",
+                  error = SimulatorDeviceError(DeviceError.Severity.ERROR, detail),
+                )
+              throw DeviceActionException(detail, e)
+            }
+
+          if (_stateFlow.value !is DeviceState.Connected) {
             _stateFlow.value =
               DeviceState.Disconnected(
-                properties = baseProperties,
-                isTransitioning = false,
-                status = "Offline",
-                error = SimulatorDeviceError(DeviceError.Severity.ERROR, detail),
+                properties = buildProperties(disambiguator = info.serial),
+                isTransitioning = true,
+                status = "Connecting to ${info.serial}…",
               )
-            throw DeviceActionException(detail, e)
           }
 
-        if (_stateFlow.value !is DeviceState.Connected) {
-          _stateFlow.value =
-            DeviceState.Disconnected(
-              properties = buildProperties(disambiguator = info.serial),
-              isTransitioning = true,
-              status = "Connecting to ${info.serial}…",
-            )
-        }
-
-        val connected =
-          withTimeoutOrNull(connectTimeoutMillis) {
-            _stateFlow.first { it is DeviceState.Connected }
+          val connected =
+            withTimeoutOrNull(connectTimeoutMillis) {
+              _stateFlow.first { it is DeviceState.Connected }
+            }
+          if (connected == null) {
+            val message =
+              "${profile.displayName} started on ${info.serial}, but ADB did not detect it " +
+                "within ${connectTimeoutMillis / 1000}s."
+            _stateFlow.value =
+              DeviceState.Disconnected(
+                properties = buildProperties(disambiguator = info.serial),
+                isTransitioning = false,
+                status = "Waiting for ADB (${info.serial})",
+                error = SimulatorDeviceError(DeviceError.Severity.WARNING, message),
+              )
+            throw DeviceActionException(message)
           }
-        if (connected == null) {
-          val message =
-            "${profile.displayName} started on ${info.serial}, but ADB did not detect it " +
-              "within ${connectTimeoutMillis / 1000}s."
-          _stateFlow.value =
-            DeviceState.Disconnected(
-              properties = buildProperties(disambiguator = info.serial),
-              isTransitioning = false,
-              status = "Waiting for ADB (${info.serial})",
-              error = SimulatorDeviceError(DeviceError.Severity.WARNING, message),
-            )
-          throw DeviceActionException(message)
+        } catch (e: CancellationException) {
+          try {
+            if (!wasAlreadyRunning) {
+              withContext(NonCancellable + ioDispatcher) {
+                runCatching { controller.stop(profile) }
+              }
+            }
+          } finally {
+            detach()
+          }
+          throw e
         }
       }
     }
