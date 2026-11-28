@@ -134,16 +134,20 @@ private constructor(
 
   fun stop() {
     if (!stopped.compareAndSet(false, true)) return
-    runCatching { process.outputStream.close() }
-    if (!process.waitFor(3, TimeUnit.SECONDS)) {
-      process.destroy()
-      if (!process.waitFor(2, TimeUnit.SECONDS)) {
-        process.destroyForcibly()
-      }
-    }
+    stopProcess(process)
   }
 
   internal companion object {
+    internal fun stopProcess(process: Process) {
+      runCatching { process.outputStream.close() }
+      if (!process.waitFor(3, TimeUnit.SECONDS)) {
+        process.destroy()
+        if (!process.waitFor(2, TimeUnit.SECONDS)) {
+          process.destroyForcibly()
+        }
+      }
+    }
+
     /**
      * Starts [command] and waits up to [startupTimeoutSeconds] for `DeviceHost`'s `device` event
      * carrying the `emulator-<port>` serial.
@@ -152,6 +156,7 @@ private constructor(
       command: List<String>,
       workingDirectory: File? = null,
       startupTimeoutSeconds: Long = 90,
+      onProcessStarted: (Process) -> Unit = {},
       onLog: (String) -> Unit = {},
       onExit: (Int) -> Unit = {},
     ): RunningSimulatorProcess {
@@ -160,6 +165,7 @@ private constructor(
         pb.directory(workingDirectory)
       }
       val process = pb.start()
+      onProcessStarted(process)
       val ready = CompletableFuture<SimulatorDeviceInfo>()
       val recentStderr = ArrayDeque<String>()
 

@@ -14,6 +14,8 @@ import ee.schimke.composeai.uibuilder.intellij.UiBuilderSettings
 import ee.schimke.composeai.uibuilder.intellij.notifyUiBuilder
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -36,9 +38,26 @@ internal interface SimulatorController {
   fun stop(profile: SimulatorProfile)
 }
 
-internal class SimulatorManagerService : Disposable, SimulatorController {
+internal class SimulatorManagerService
+internal constructor(
+  private val commandBuilder: (SimulatorProfile) -> List<String>,
+) : Disposable, SimulatorController {
+  @Suppress("unused")
+  constructor() :
+    this(
+      { profile ->
+        SimulatorDeviceEvents.buildLaunchCommand(
+          UiBuilderSettings.resolveComposePreviewCli(),
+          profile,
+        )
+      },
+    )
+
   private val logger = Logger.getInstance(SimulatorManagerService::class.java)
+  private val disposed = AtomicBoolean(false)
   private val running = ConcurrentHashMap<SimulatorProfile, RunningSimulatorProcess>()
+  private val inFlightProcesses = ConcurrentHashMap<SimulatorProfile, Process>()
+  private val stopEpochs = ConcurrentHashMap<SimulatorProfile, AtomicLong>()
   private val profileLocks = ConcurrentHashMap<SimulatorProfile, Any>()
   private val listeners = ConcurrentHashMap.newKeySet<() -> Unit>()
 
@@ -56,6 +75,9 @@ internal class SimulatorManagerService : Disposable, SimulatorController {
     return proc.deviceInfo
   }
 
+  internal fun isActiveOrStarting(profile: SimulatorProfile): Boolean =
+    runningInfo(profile) != null || inFlightProcesses[profile]?.isAlive == true
+
   override fun findProfileBySerial(serial: String): SimulatorProfile? =
     running.entries
       .firstOrNull { (_, proc) -> proc.isAlive && proc.deviceInfo.serial == serial }
@@ -64,24 +86,46 @@ internal class SimulatorManagerService : Disposable, SimulatorController {
   override fun start(profile: SimulatorProfile, projectBasePath: String?): SimulatorDeviceInfo {
     val lock = profileLocks.computeIfAbsent(profile) { Any() }
     return synchronized(lock) {
+      if (disposed.get()) {
+        throw IllegalStateException("Compose Preview Simulator service is shutting down.")
+      }
       runningInfo(profile)?.let {
         return@synchronized it
       }
-      val cli = UiBuilderSettings.resolveComposePreviewCli()
-      val command = SimulatorDeviceEvents.buildLaunchCommand(cli, profile)
+      val epoch = stopEpoch(profile).get()
+      val command = commandBuilder(profile)
       logger.info("Starting ${profile.displayName}: ${command.joinToString(" ")}")
       val startedRef = AtomicReference<RunningSimulatorProcess?>(null)
+      val rawProcessRef = AtomicReference<Process?>(null)
       val started =
-        RunningSimulatorProcess.start(
-          command = command,
-          workingDirectory = projectBasePath?.let(::File),
-          onLog = { line -> logger.info("[${profile.id}] $line") },
-          onExit = { code ->
-            logger.info("${profile.displayName} exited with code $code")
-            startedRef.get()?.let { exited -> running.remove(profile, exited) }
-            notifyListeners()
-          },
-        )
+        try {
+          RunningSimulatorProcess.start(
+            command = command,
+            workingDirectory = projectBasePath?.let(::File),
+            onProcessStarted = { proc ->
+              rawProcessRef.set(proc)
+              inFlightProcesses[profile] = proc
+              notifyListeners()
+              if (stopEpoch(profile).get() != epoch || disposed.get()) {
+                inFlightProcesses.remove(profile, proc)
+                RunningSimulatorProcess.stopProcess(proc)
+              }
+            },
+            onLog = { line -> logger.info("[${profile.id}] $line") },
+            onExit = { code ->
+              logger.info("${profile.displayName} exited with code $code")
+              startedRef.get()?.let { exited -> running.remove(profile, exited) }
+              notifyListeners()
+            },
+          )
+        } finally {
+          rawProcessRef.get()?.let { inFlightProcesses.remove(profile, it) }
+        }
+      if (stopEpoch(profile).get() != epoch || disposed.get()) {
+        started.stop()
+        notifyListeners()
+        throw IllegalStateException("${profile.displayName} was stopped while starting.")
+      }
       startedRef.set(started)
       val previous = running.put(profile, started)
       if (previous != null && previous !== started) {
@@ -96,22 +140,36 @@ internal class SimulatorManagerService : Disposable, SimulatorController {
   }
 
   override fun stop(profile: SimulatorProfile) {
+    stopEpoch(profile).incrementAndGet()
+    val inFlight = inFlightProcesses.remove(profile)
+    if (inFlight != null) {
+      RunningSimulatorProcess.stopProcess(inFlight)
+    }
     val lock = profileLocks.computeIfAbsent(profile) { Any() }
-    val proc = synchronized(lock) { running.remove(profile) } ?: return
-    proc.stop()
-    notifyListeners()
+    val proc = synchronized(lock) { running.remove(profile) }
+    proc?.stop()
+    if (inFlight != null || proc != null) {
+      notifyListeners()
+    }
   }
 
   fun stopAll() {
-    val snapshot = running.keys.toList()
-    for (profile in snapshot) {
+    for (profile in SimulatorProfile.entries) {
+      stopEpoch(profile).incrementAndGet()
+      inFlightProcesses.remove(profile)?.let { RunningSimulatorProcess.stopProcess(it) }
+    }
+    for (profile in SimulatorProfile.entries) {
       stop(profile)
     }
   }
 
   override fun dispose() {
+    disposed.set(true)
     stopAll()
   }
+
+  private fun stopEpoch(profile: SimulatorProfile): AtomicLong =
+    stopEpochs.computeIfAbsent(profile) { AtomicLong(0L) }
 
   private fun notifyListeners() {
     for (listener in listeners) {
@@ -166,7 +224,7 @@ internal class StopSimulatorsAction : AnAction() {
 
   override fun update(event: AnActionEvent) {
     val svc = SimulatorManagerService.getInstance()
-    event.presentation.isEnabled = SimulatorProfile.entries.any { svc.runningInfo(it) != null }
+    event.presentation.isEnabled = SimulatorProfile.entries.any { svc.isActiveOrStarting(it) }
   }
 
   override fun actionPerformed(event: AnActionEvent) {

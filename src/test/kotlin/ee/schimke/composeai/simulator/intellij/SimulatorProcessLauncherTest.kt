@@ -119,4 +119,73 @@ class SimulatorProcessLauncherTest {
     assertTrue(error.message?.contains("missing Java 21") == true, error.message)
     dir.deleteRecursively()
   }
+
+  @Test
+  fun stopAllCancelsInFlightLaunchAndStopsReadySimulator() {
+    val dir = Files.createTempDirectory("sim-stop-all").toFile()
+    val phoneScript = File(dir, "phone-sim.sh")
+    phoneScript.writeText(
+      """
+      #!/usr/bin/env bash
+      set -euo pipefail
+      echo '{"event":"device","serial":"emulator-5562","adbPort":5563,"consolePort":5562,"grpcPort":8562,"avd":"Sim_Phone","formFactor":"phone"}'
+      cat > /dev/null
+      """
+        .trimIndent() + "\n",
+    )
+    phoneScript.setExecutable(true)
+
+    val wearScript = File(dir, "wear-slow-sim.sh")
+    wearScript.writeText(
+      """
+      #!/usr/bin/env bash
+      set -euo pipefail
+      # Block before emitting the device event until stdin closes.
+      cat > /dev/null
+      """
+        .trimIndent() + "\n",
+    )
+    wearScript.setExecutable(true)
+
+    val service = SimulatorManagerService { profile ->
+      when (profile) {
+        SimulatorProfile.PHONE -> listOf(phoneScript.absolutePath)
+        SimulatorProfile.WEAR -> listOf(wearScript.absolutePath)
+      }
+    }
+    try {
+      val phoneInfo = service.start(SimulatorProfile.PHONE)
+      assertEquals("emulator-5562", phoneInfo.serial)
+
+      val wearFinished = CountDownLatch(1)
+      var wearError: Throwable? = null
+      val wearThread = Thread {
+        try {
+          service.start(SimulatorProfile.WEAR)
+        } catch (t: Throwable) {
+          wearError = t
+        } finally {
+          wearFinished.countDown()
+        }
+      }
+      wearThread.start()
+
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+      while (!service.isActiveOrStarting(SimulatorProfile.WEAR) && System.nanoTime() < deadline) {
+        Thread.sleep(20)
+      }
+      assertTrue(service.isActiveOrStarting(SimulatorProfile.WEAR))
+
+      service.stopAll()
+      assertTrue(wearFinished.await(5, TimeUnit.SECONDS))
+      assertNotNull(wearError)
+      assertNull(service.runningInfo(SimulatorProfile.PHONE))
+      assertNull(service.runningInfo(SimulatorProfile.WEAR))
+      assertFalse(service.isActiveOrStarting(SimulatorProfile.PHONE))
+      assertFalse(service.isActiveOrStarting(SimulatorProfile.WEAR))
+    } finally {
+      service.dispose()
+      dir.deleteRecursively()
+    }
+  }
 }
