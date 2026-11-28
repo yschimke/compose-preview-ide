@@ -109,8 +109,11 @@ internal class SimulatorDeviceProvisionerPlugin(
   private val _devices = MutableStateFlow<List<DeviceHandle>>(handlesByProfile.values.toList())
   override val devices: StateFlow<List<DeviceHandle>> = _devices.asStateFlow()
 
+  private val controllerVersion = MutableStateFlow(0L)
+
   init {
     val listener = controller.addChangeListener {
+      controllerVersion.update { it + 1 }
       for (handle in handlesByProfile.values) {
         handle.onControllerStateChanged()
       }
@@ -120,11 +123,33 @@ internal class SimulatorDeviceProvisionerPlugin(
 
   override suspend fun claim(device: ConnectedDevice): DeviceHandle? {
     val serial = device.deviceInfoFlow.value.serialNumber
-    val profile = controller.findProfileBySerial(serial) ?: return null
+    val profile =
+      controller.findProfileBySerial(serial)
+        ?: if (serial.startsWith("emulator-") && controller.hasPendingLaunch()) {
+          awaitPendingLaunchForSerial(serial)
+        } else {
+          null
+        }
+        ?: return null
     val handle = handlesByProfile[profile] ?: return null
     handle.attach(device)
     return handle
   }
+
+  private suspend fun awaitPendingLaunchForSerial(serial: String): SimulatorProfile? =
+    withTimeoutOrNull(connectTimeoutMillis) {
+      while (true) {
+        val observedVersion = controllerVersion.value
+        controller.findProfileBySerial(serial)?.let {
+          return@withTimeoutOrNull it
+        }
+        if (!controller.hasPendingLaunch()) {
+          return@withTimeoutOrNull null
+        }
+        controllerVersion.first { it != observedVersion }
+      }
+      @Suppress("UNREACHABLE_CODE") null
+    }
 
   internal companion object {
     const val PLUGIN_ID: String = "ComposePreviewSimulator"

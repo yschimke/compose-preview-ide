@@ -33,6 +33,8 @@ internal interface SimulatorController {
 
   fun findProfileBySerial(serial: String): SimulatorProfile?
 
+  fun hasPendingLaunch(): Boolean = false
+
   fun start(profile: SimulatorProfile, projectBasePath: String? = null): SimulatorDeviceInfo
 
   fun stop(profile: SimulatorProfile)
@@ -56,6 +58,7 @@ internal constructor(
   private val logger = Logger.getInstance(SimulatorManagerService::class.java)
   private val disposed = AtomicBoolean(false)
   private val running = ConcurrentHashMap<SimulatorProfile, RunningSimulatorProcess>()
+  private val pendingLaunchProfiles = ConcurrentHashMap.newKeySet<SimulatorProfile>()
   private val inFlightProcesses = ConcurrentHashMap<SimulatorProfile, Process>()
   private val stopEpochs = ConcurrentHashMap<SimulatorProfile, AtomicLong>()
   private val profileLocks = ConcurrentHashMap<SimulatorProfile, Any>()
@@ -76,7 +79,11 @@ internal constructor(
   }
 
   internal fun isActiveOrStarting(profile: SimulatorProfile): Boolean =
-    runningInfo(profile) != null || inFlightProcesses[profile]?.isAlive == true
+    runningInfo(profile) != null ||
+      pendingLaunchProfiles.contains(profile) ||
+      inFlightProcesses[profile]?.isAlive == true
+
+  override fun hasPendingLaunch(): Boolean = pendingLaunchProfiles.isNotEmpty()
 
   override fun findProfileBySerial(serial: String): SimulatorProfile? =
     running.entries
@@ -97,45 +104,50 @@ internal constructor(
       logger.info("Starting ${profile.displayName}: ${command.joinToString(" ")}")
       val startedRef = AtomicReference<RunningSimulatorProcess?>(null)
       val rawProcessRef = AtomicReference<Process?>(null)
-      val started =
-        try {
-          RunningSimulatorProcess.start(
-            command = command,
-            workingDirectory = projectBasePath?.let(::File),
-            onProcessStarted = { proc ->
-              rawProcessRef.set(proc)
-              inFlightProcesses[profile] = proc
-              notifyListeners()
-              if (stopEpoch(profile).get() != epoch || disposed.get()) {
-                inFlightProcesses.remove(profile, proc)
-                RunningSimulatorProcess.stopProcess(proc)
-              }
-            },
-            onLog = { line -> logger.info("[${profile.id}] $line") },
-            onExit = { code ->
-              logger.info("${profile.displayName} exited with code $code")
-              startedRef.get()?.let { exited -> running.remove(profile, exited) }
-              notifyListeners()
-            },
-          )
-        } finally {
-          rawProcessRef.get()?.let { inFlightProcesses.remove(profile, it) }
-        }
-      if (stopEpoch(profile).get() != epoch || disposed.get()) {
-        started.stop()
-        notifyListeners()
-        throw IllegalStateException("${profile.displayName} was stopped while starting.")
-      }
-      startedRef.set(started)
-      val previous = running.put(profile, started)
-      if (previous != null && previous !== started) {
-        previous.stop()
-      }
-      if (!started.isAlive) {
-        running.remove(profile, started)
-      }
+      pendingLaunchProfiles.add(profile)
       notifyListeners()
-      started.deviceInfo
+      try {
+        val started =
+          try {
+            RunningSimulatorProcess.start(
+              command = command,
+              workingDirectory = projectBasePath?.let(::File),
+              onProcessStarted = { proc ->
+                rawProcessRef.set(proc)
+                inFlightProcesses[profile] = proc
+                notifyListeners()
+                if (stopEpoch(profile).get() != epoch || disposed.get()) {
+                  inFlightProcesses.remove(profile, proc)
+                  RunningSimulatorProcess.stopProcess(proc)
+                }
+              },
+              onLog = { line -> logger.info("[${profile.id}] $line") },
+              onExit = { code ->
+                logger.info("${profile.displayName} exited with code $code")
+                startedRef.get()?.let { exited -> running.remove(profile, exited) }
+                notifyListeners()
+              },
+            )
+          } finally {
+            rawProcessRef.get()?.let { inFlightProcesses.remove(profile, it) }
+          }
+        if (stopEpoch(profile).get() != epoch || disposed.get()) {
+          started.stop()
+          throw IllegalStateException("${profile.displayName} was stopped while starting.")
+        }
+        startedRef.set(started)
+        val previous = running.put(profile, started)
+        if (previous != null && previous !== started) {
+          previous.stop()
+        }
+        if (!started.isAlive) {
+          running.remove(profile, started)
+        }
+        started.deviceInfo
+      } finally {
+        pendingLaunchProfiles.remove(profile)
+        notifyListeners()
+      }
     }
   }
 

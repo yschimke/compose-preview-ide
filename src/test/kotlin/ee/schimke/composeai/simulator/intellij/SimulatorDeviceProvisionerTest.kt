@@ -71,6 +71,7 @@ class SimulatorDeviceProvisionerTest {
   private class FakeSimulatorController(
     var failStart: Boolean = false,
     var onStart: ((SimulatorProfile, SimulatorDeviceInfo) -> Unit)? = null,
+    @Volatile var pendingLaunch: Boolean = false,
   ) : SimulatorController {
     val running = ConcurrentHashMap<SimulatorProfile, SimulatorDeviceInfo>()
     val startedProfiles = mutableListOf<SimulatorProfile>()
@@ -86,6 +87,8 @@ class SimulatorDeviceProvisionerTest {
 
     override fun findProfileBySerial(serial: String): SimulatorProfile? =
       running.entries.firstOrNull { it.value.serial == serial }?.key
+
+    override fun hasPendingLaunch(): Boolean = pendingLaunch
 
     override fun start(profile: SimulatorProfile, projectBasePath: String?): SimulatorDeviceInfo {
       if (failStart) throw IllegalStateException("compose-preview not found")
@@ -328,6 +331,68 @@ class SimulatorDeviceProvisionerTest {
       val connected = assertIs<DeviceState.Connected>(phone.stateFlow.value)
       assertEquals(fakeDevice, connected.connectedDevice)
       assertTrue(connected.isOnline())
+    } finally {
+      scope.cancel()
+    }
+  }
+
+  @Test
+  fun claimWaitsForInFlightLaunchAndClaimsMatchingEmulator(): Unit = runBlocking {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    try {
+      val controller = FakeSimulatorController(pendingLaunch = true)
+      val plugin =
+        SimulatorDeviceProvisionerPlugin(
+          scope = scope,
+          projectBasePath = null,
+          controller = controller,
+          ui = testUi,
+          ioDispatcher = Dispatchers.Default,
+          connectTimeoutMillis = 5_000L,
+        )
+      val fakeDevice = FakeConnectedDevice("emulator-5554", AdbDeviceState.ONLINE)
+
+      val claimJob = async { plugin.claim(fakeDevice) }
+      delay(50)
+      assertFalse(claimJob.isCompleted)
+
+      controller.start(SimulatorProfile.PHONE, null)
+      controller.pendingLaunch = false
+      controller.notifyListeners()
+
+      val claimed = assertNotNull(claimJob.await())
+      assertEquals(DeviceType.HANDHELD, claimed.state.properties.deviceType)
+      assertIs<DeviceState.Connected>(claimed.stateFlow.value)
+    } finally {
+      scope.cancel()
+    }
+  }
+
+  @Test
+  fun claimReleasesUnrelatedEmulatorWhenInFlightLaunchFinishes(): Unit = runBlocking {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    try {
+      val controller = FakeSimulatorController(pendingLaunch = true)
+      val plugin =
+        SimulatorDeviceProvisionerPlugin(
+          scope = scope,
+          projectBasePath = null,
+          controller = controller,
+          ui = testUi,
+          ioDispatcher = Dispatchers.Default,
+          connectTimeoutMillis = 5_000L,
+        )
+      val unrelatedAvd = FakeConnectedDevice("emulator-5558", AdbDeviceState.ONLINE)
+
+      val claimJob = async { plugin.claim(unrelatedAvd) }
+      delay(50)
+      assertFalse(claimJob.isCompleted)
+
+      controller.start(SimulatorProfile.PHONE, null)
+      controller.pendingLaunch = false
+      controller.notifyListeners()
+
+      assertNull(claimJob.await())
     } finally {
       scope.cancel()
     }
