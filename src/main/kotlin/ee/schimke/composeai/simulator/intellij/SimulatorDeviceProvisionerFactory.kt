@@ -33,8 +33,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -172,14 +174,19 @@ internal class SimulatorDeviceHandle(
           )
 
       override suspend fun activate() {
-        if (_stateFlow.value is DeviceState.Connected) return
         val wasAlreadyRunning = controller.runningInfo(profile) != null
-        _stateFlow.value =
-          DeviceState.Disconnected(
-            properties = baseProperties,
-            isTransitioning = true,
-            status = "Starting ${profile.displayName}…",
-          )
+        val previous = _stateFlow.getAndUpdate { current ->
+          if (current is DeviceState.Connected) {
+            current
+          } else {
+            DeviceState.Disconnected(
+              properties = baseProperties,
+              isTransitioning = true,
+              status = "Starting ${profile.displayName}…",
+            )
+          }
+        }
+        if (previous is DeviceState.Connected) return
         try {
           val info =
             try {
@@ -188,23 +195,31 @@ internal class SimulatorDeviceHandle(
               throw e
             } catch (e: Exception) {
               val detail = e.message ?: "Failed to start ${profile.displayName}"
-              _stateFlow.value =
-                DeviceState.Disconnected(
-                  properties = baseProperties,
-                  isTransitioning = false,
-                  status = "Offline",
-                  error = SimulatorDeviceError(DeviceError.Severity.ERROR, detail),
-                )
+              _stateFlow.update { current ->
+                if (current is DeviceState.Connected) {
+                  current
+                } else {
+                  DeviceState.Disconnected(
+                    properties = baseProperties,
+                    isTransitioning = false,
+                    status = "Offline",
+                    error = SimulatorDeviceError(DeviceError.Severity.ERROR, detail),
+                  )
+                }
+              }
               throw DeviceActionException(detail, e)
             }
 
-          if (_stateFlow.value !is DeviceState.Connected) {
-            _stateFlow.value =
+          _stateFlow.update { current ->
+            if (current is DeviceState.Connected) {
+              current
+            } else {
               DeviceState.Disconnected(
                 properties = buildProperties(disambiguator = info.serial),
                 isTransitioning = true,
                 status = "Connecting to ${info.serial}…",
               )
+            }
           }
 
           val connected =
@@ -215,14 +230,21 @@ internal class SimulatorDeviceHandle(
             val message =
               "${profile.displayName} started on ${info.serial}, but ADB did not detect it " +
                 "within ${connectTimeoutMillis / 1000}s."
-            _stateFlow.value =
-              DeviceState.Disconnected(
-                properties = buildProperties(disambiguator = info.serial),
-                isTransitioning = false,
-                status = "Waiting for ADB (${info.serial})",
-                error = SimulatorDeviceError(DeviceError.Severity.WARNING, message),
-              )
-            throw DeviceActionException(message)
+            val beforeTimeout = _stateFlow.getAndUpdate { current ->
+              if (current is DeviceState.Connected) {
+                current
+              } else {
+                DeviceState.Disconnected(
+                  properties = buildProperties(disambiguator = info.serial),
+                  isTransitioning = false,
+                  status = "Waiting for ADB (${info.serial})",
+                  error = SimulatorDeviceError(DeviceError.Severity.WARNING, message),
+                )
+              }
+            }
+            if (beforeTimeout !is DeviceState.Connected) {
+              throw DeviceActionException(message)
+            }
           }
         } catch (e: CancellationException) {
           try {
@@ -254,8 +276,7 @@ internal class SimulatorDeviceHandle(
           )
 
       override suspend fun deactivate() {
-        val current = _stateFlow.value
-        _stateFlow.value =
+        _stateFlow.update { current ->
           if (current is DeviceState.Connected) {
             current.copy(isTransitioning = true, status = "Stopping…")
           } else {
@@ -265,6 +286,7 @@ internal class SimulatorDeviceHandle(
               status = "Stopping…",
             )
           }
+        }
         try {
           withContext(ioDispatcher) { controller.stop(profile) }
         } finally {
@@ -284,13 +306,21 @@ internal class SimulatorDeviceHandle(
         when (info.deviceState) {
           AdbDeviceState.DISCONNECTED,
           AdbDeviceState.DETACHED -> {
-            if (_stateFlow.value.connectedDevice === device) {
-              _stateFlow.value = DeviceState.Disconnected(baseProperties, status = "Offline")
+            _stateFlow.update { current ->
+              if (current.connectedDevice === device) {
+                DeviceState.Disconnected(baseProperties, status = "Offline")
+              } else {
+                current
+              }
             }
           }
           else -> {
-            if (_stateFlow.value.connectedDevice === device) {
-              _stateFlow.value = DeviceState.Connected(connectedProps, device, info.deviceState)
+            _stateFlow.update { current ->
+              if (current.connectedDevice === device) {
+                DeviceState.Connected(connectedProps, device, info.deviceState)
+              } else {
+                current
+              }
             }
           }
         }

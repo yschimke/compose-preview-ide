@@ -300,4 +300,36 @@ class SimulatorDeviceProvisionerTest {
       scope.cancel()
     }
   }
+
+  @Test
+  fun activatePreservesClaimThatArrivesDuringStart(): Unit = runBlocking {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    try {
+      val fakeDevice = FakeConnectedDevice("emulator-5554", AdbDeviceState.ONLINE)
+      lateinit var plugin: SimulatorDeviceProvisionerPlugin
+      val controller =
+        FakeSimulatorController(
+          onStart = { _, _ -> runBlocking { assertNotNull(plugin.claim(fakeDevice)) } },
+        )
+      plugin =
+        SimulatorDeviceProvisionerPlugin(
+          scope = scope,
+          projectBasePath = null,
+          controller = controller,
+          ui = testUi,
+          ioDispatcher = Dispatchers.Unconfined,
+          connectTimeoutMillis = 1_000L,
+        )
+      val phone =
+        plugin.devices.value.first { it.state.properties.deviceType == DeviceType.HANDHELD }
+
+      phone.activationAction!!.activate()
+
+      val connected = assertIs<DeviceState.Connected>(phone.stateFlow.value)
+      assertEquals(fakeDevice, connected.connectedDevice)
+      assertTrue(connected.isOnline())
+    } finally {
+      scope.cancel()
+    }
+  }
 }
